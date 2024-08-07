@@ -15,6 +15,7 @@ class Item:
 
 
 class DatabaseInterface(ABC):
+
     @abstractmethod
     def create_tables(self):
         pass
@@ -36,13 +37,14 @@ def get_database(db_type='sqlite') -> DatabaseInterface:
     if db_type == 'sqlite':
         from database.sqlite_db import SQLiteDatabase
         return SQLiteDatabase('data/marketplace.db')
-    
+
     elif db_type == 'postgresql':
         # import here to avoid psycopg2 dependency when using sqlite
         from database.postgresql_db import PostgreSQLDatabase
-        return PostgreSQLDatabase(host=os.environ.get('DB_HOST'),
-                                  database=os.environ.get('DB_NAME'),
-                                  user=os.environ.get('DB_USER'),
-                                  password=os.environ.get('DB_PASSWORD'))
+        return PostgreSQLDatabase(host=os.environ.get('PGHOST'),
+                                  database=os.environ.get('PGDATABASE'),
+                                  user=os.environ.get('PGUSER'),
+                                  password=os.environ.get('PGPASSWORD'),
+                                  port=os.environ.get('PGPORT'))
     else:
         raise ValueError(f"Unsupported database type: {db_type}")
