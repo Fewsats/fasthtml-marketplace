@@ -38,6 +38,7 @@ def get_database(db_type='sqlite') -> DatabaseInterface:
         return SQLiteDatabase('data/marketplace.db')
     
     elif db_type == 'postgresql':
+        # import here to avoid psycopg2 dependency when using sqlite
         from database.postgresql_db import PostgreSQLDatabase
         return PostgreSQLDatabase(host=os.environ.get('DB_HOST'),
                                   database=os.environ.get('DB_NAME'),
