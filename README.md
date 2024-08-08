@@ -16,10 +16,10 @@ Welcome to the FastHTML L402 Marketplace project! This project demonstrates a wo
        fewsats_provider = FewsatsInvoiceProvider(api_key="your_api_key_here")
        ```
 
-3. **Choose Database and Storage:**
-   - The project supports both SQLite and PostgreSQL databases out of the box.
-   - For storage, you can use either local file storage or Replit's object storage.
-   - To switch between options, update the `get_database()` and `get_storage()` functions in their respective files.
+3. **Configure Database and Storage:**
+   - The project uses SQLite by default, with the option to use PostgreSQL.
+   - For storage, local file storage is used by default.
+   - To use PostgreSQL, set the `DATABASE_URL` environment variable.
 
 4. **Run the Server:** Click the "Run" button in Replit to start the server.
 
@@ -29,6 +29,41 @@ This marketplace allows users to:
 - Upload items for sale (including title, description, price, cover image, and file)
 - View a gallery of items
 - Download items using L402 payments
+
+## Project Structure
+
+The project is organized into several key files:
+
+### main.py
+The main application file that sets up the FastHTML app, routes, and handles the core functionality of the marketplace.
+
+Key components:
+- FastHTML app setup with CORS middleware
+- Database and storage initialization
+- L402 authentication setup
+- Route handlers for the main page, file uploads, and downloads
+
+### store.py
+Handles database operations and defines the Item model.
+
+Key components:
+- `Item` dataclass definition
+- Database connection and table creation
+- CRUD operations for items
+
+### storage.py
+Defines the storage interface and implementations for file handling.
+
+Key components:
+- `StorageInterface` abstract base class
+- `LocalFileStorage` implementation for local file storage
+- `ReplitObjectStorage` implementation for Replit's object storage
+
+### credentials.py
+Implements the MacaroonService for L402 authentication.
+
+Key components:
+- `FastSQLMacaroonService` class for storing and retrieving authentication tokens
 
 ## Key Features
 
@@ -78,12 +113,7 @@ To switch between local file storage and Replit object storage, update the `get_
 
 - Implement user authentication
 - Enhance styling and UI/UX
-- Add more payment options
-- Implement caching for improved performance
-
-## Contributing
-
-Contributions are welcome! Feel free to submit pull requests or open issues for any improvements or bug fixes.
+- Allow to use credentials to download in the marketplace
 
 ## Acknowledgements
 
