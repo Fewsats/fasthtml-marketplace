@@ -8,7 +8,8 @@ from l402.server.invoice_provider import FewsatsInvoiceProvider
 from credentials import FastSQLMacaroonService
 from storage import get_storage
 from fastsql.core import Database
-from item_card import ItemCard
+from main_layout import MainLayout
+from item_details_page import ItemDetailsPage
 
 # Database configuration
 url = os.environ['DATABASE_URL'].replace('postgres://', 'postgresql://')
@@ -61,7 +62,16 @@ flexboxgrid = Link(
     "https://cdnjs.cloudflare.com/ajax/libs/flexboxgrid/6.3.1/flexboxgrid.min.css",
     type="text/css")
 
-app = FastHTML(hdrs=(picolink, flexboxgrid))
+# Add Tailwind CSS from CDN
+# tailwind = Link(
+#     rel="stylesheet",
+#     href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css",
+#     type="text/css")
+
+tailwind_script = Script(src="https://cdn.tailwindcss.com")
+
+app = FastHTML(hdrs=(flexboxgrid, tailwind_script))
+# app = FastHTML(hdrs=(picolink, flexboxgrid, tailwind))
 
 # Update CORS middleware to expose all headers for L402
 app.add_middleware(
@@ -135,10 +145,12 @@ def mk_form(**kw):
 async def get(request):
     upload_form = Card(H4("Upload a New Item Form"),
                        mk_form(hx_target="#item-list", hx_swap="afterbegin"))
-    gallery = Div(*[item.__ft__() for item in items()],
-                  id='item-list',
-                  cls="row")
-    return Titled("Marketplace", Main(upload_form, gallery, cls='container'))
+    # gallery = Gallery(items)
+    # gallery = Div(*[item.__ft__() for item in items()],
+    #               id='item-list',
+    #               cls="row")
+    # return Titled("Marketplace", Main(upload_form, gallery, cls='container'))
+    return MainLayout(title="Files Catalog", items=items)
 
 
 @rt("/")
@@ -171,6 +183,14 @@ async def download_file(req, id: int):
     if not item or not item.file_path:
         return PlainTextResponse("File not found", status_code=404)
     return RedirectResponse(url=f"/files/{item.file_path}")
+
+
+@rt("/file/{id:int}", methods=["GET"])
+async def get_item_details(request, id: int):
+    item = items[id]
+    if not item:
+        return PlainTextResponse("Item not found", status_code=404)
+    return ItemDetailsPage(item)
 
 
 serve()
