@@ -7,15 +7,32 @@ from l402.server import Authenticator, FastHTML_l402_decorator
 from l402.server.invoice_provider import FewsatsInvoiceProvider
 from credentials import FastSQLMacaroonService
 from storage import get_storage
-from store import get_db
+from fastsql.core import Database
+from item_card import ItemCard
 
 # Database configuration
-connstr = os.environ.get("DATABASE_URL", "sqlite:///./data/marketplace.db")
-if connstr.startswith("postgres://"):
-    connstr = connstr.replace("postgres://", "postgresql://", 1)
+url = os.environ['DATABASE_URL'].replace('postgres://', 'postgresql://')
+db = Database(url)
+
 
 # Initialize database
-db = get_db(connstr)
+@dataclass
+class Item:
+    id: int
+    title: str
+    description: str
+    price: int
+    cover_image: str
+    file_path: str
+    tags: str = ""
+
+
+@patch
+def __ft__(self: Item):
+    return ItemCard(self)
+
+
+items = db.create(Item, pk='id')
 
 # Set up Fewsats invoice provider
 # 1. Sign up at app.fewsats.com
@@ -27,7 +44,7 @@ api_key = os.environ.get("FEWSATS_API_KEY")
 fewsats_provider = FewsatsInvoiceProvider(api_key=api_key)
 
 # Set up MacaroonService for storing authentication tokens
-macaroon_service = FastSQLMacaroonService(connstr)
+macaroon_service = FastSQLMacaroonService(url)
 
 # Initialize the L402 Authenticator
 authenticator = Authenticator(location='localh8000',
@@ -46,7 +63,7 @@ flexboxgrid = Link(
 
 app = FastHTML(hdrs=(picolink, flexboxgrid))
 
-# Update CORS middleware to expose all headers
+# Update CORS middleware to expose all headers for L402
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -118,8 +135,7 @@ def mk_form(**kw):
 async def get(request):
     upload_form = Card(H4("Upload a New Item Form"),
                        mk_form(hx_target="#item-list", hx_swap="afterbegin"))
-    items = db.get_items()
-    gallery = Div(*[item.__ft__() for item in items],
+    gallery = Div(*[item.__ft__() for item in items()],
                   id='item-list',
                   cls="row")
     return Titled("Marketplace", Main(upload_form, gallery, cls='container'))
@@ -132,21 +148,18 @@ async def post(request):
     item_data = {
         'title': form.get('title'),
         'description': form.get('description'),
-        'price':
-        int(float(form.get('price')) * 100) if form.get('price') else 0,
-        'cover_image': '',
-        'file_path': ''
+        'price': form.get('price'),
     }
 
     # Handle file uploads
-    for field in ['cover_image', 'file']:
+    for field in ['cover_image', 'file_path']:
         if file := form.get(field):
             content = await file.read()
             filename = f"{field}_{uuid.uuid4()}{os.path.splitext(file.filename)[1]}"
             storage.upload(filename, content)
             item_data[field] = filename
 
-    new_item = db.create_item(item_data)
+    new_item = items.insert(Item(**item_data))
     return new_item.__ft__()
 
 
@@ -154,7 +167,7 @@ async def post(request):
 @FastHTML_l402_decorator(authenticator, lambda req:
                          (1, 'USD', 'Download of an item'))
 async def download_file(req, id: int):
-    item = db.get_item(id)
+    item = items[id]
     if not item or not item.file_path:
         return PlainTextResponse("File not found", status_code=404)
     return RedirectResponse(url=f"/files/{item.file_path}")
