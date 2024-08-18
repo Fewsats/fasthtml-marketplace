@@ -1,4 +1,3 @@
-
 from fasthtml.common import *
 import fasthtml.svg as svg
 

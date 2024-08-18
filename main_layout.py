@@ -2,7 +2,7 @@ from fasthtml.common import *
 from search_bar import SearchBar
 from gallery import Gallery
 
-def MainLayout(title="Files catalog", items=()):
+def MainLayout(title="Files catalog", items=(), search_query=""):
     return Main(
                 Div(cls='flex min-h-screen w-full')(
                 Div(cls='w-full flex-1')(
@@ -26,7 +26,7 @@ def MainLayout(title="Files catalog", items=()):
                                                  src='https://marketplace.fewsats.com/images/FewsatsLogo.svg', cls='h-auto w-32')
                             ),
                             H1(title, cls='mb-5 text-3xl font-bold text-white sm:text-4xl md:text-5xl'),
-                            SearchBar(),
+                            SearchBar(search_query),
                         )
                     ),
                     Gallery(items)

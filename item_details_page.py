@@ -1,11 +1,42 @@
 from fasthtml.common import *
 from back_button import BackButton
 
+DEPLOYMENT_URL = os.getenv('DEPLOYMENT_URL', 'http://localhost:5001')
 
 def ItemDetailsPage(item):
     price = f'${item.price / 100:.2f}'
     cover_image = f'/files/{item.cover_image}' if item.cover_image else 'https://via.placeholder.com/250x200'
     file_name = item.file_path.split('/')[-1] if item.file_path else ''
+
+    download_script = Script()('''
+    function downloadFile(itemId, credentials) {
+        fetch(`/download/${itemId}`, {
+            headers: {
+                'Authorization': `L402 ${credentials}`
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.blob();
+            }
+            throw new Error('Download failed');
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = '${file_name}';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Download failed. Please check your credentials and try again.');
+        });
+    }
+    ''')
 
     return Div(cls='flex min-h-screen w-full')(
         Div(cls='w-full flex-1')(
@@ -38,7 +69,10 @@ def ItemDetailsPage(item):
                                 )
                             ),
                             Div(cls='w-full flex flex-col space-y-4')(
-                                A('Pay with Hub (Credit Card)', target='_blank', href='http://app.paywithhub.com/purchases?l402_url=https%3A%2F%2Fapi.fewsats.com%2Fv0%2Fstorage%2Fdownload%2F5e3cda4c-5a5e-4635-953f-cb6fa2fb5647', cls='flex transition-all w-full justify-center rounded-lg px-3 py-2 text-base text-white outline-none hover:bg-violet-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 bg-violet-700 shadow-inner-white outline-none ring-1 ring-inset ring-zinc-700'),
+                                A('Pay with Hub (Credit Card)',
+                                   target='_blank',
+                                   href=f'http://app.paywithhub.com/purchases?l402_url={DEPLOYMENT_URL}/download/{item.id}',
+                                   cls='flex transition-all w-full justify-center rounded-lg px-3 py-2 text-base text-white outline-none hover:bg-violet-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 bg-violet-700 shadow-inner-white outline-none ring-1 ring-inset ring-zinc-700'),
                                 Div(cls='space-y-2 relative')(
                                     P('After paying with Hub, enter the provided credentials here:', cls='text-sm text-gray-600 text-center flex items-center justify-center'),
                                     Div(cls='w-full')(
@@ -46,12 +80,16 @@ def ItemDetailsPage(item):
                                             Input(id='credentials', placeholder='Enter credentials', aria_describedby='credentials-error', type='text', value='', name='credentials', cls='block w-full rounded-md border-0 px-2 py-1.5 text-black ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-1 focus:ring-inset focus:ring-zinc-950 shadow-none outline-none sm:text-sm sm:leading-6')
                                         )
                                     ),
-                                    Button('Download File', type='button', disabled='', cls='flex transition-all w-full justify-center rounded-lg px-3 py-2 text-base text-white outline-none hover:bg-violet-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 pointer-events-none bg-gray-200 text-gray-500'),
+                                    Button('Download File', 
+                                           type='button', 
+                                           onclick=f'downloadFile({item.id}, document.getElementById("credentials").value)',
+                                           cls='flex transition-all w-full justify-center rounded-lg px-3 py-2 text-base text-white outline-none hover:bg-violet-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 bg-violet-700 shadow-inner-white outline-none ring-1 ring-inset ring-zinc-700'),
                                 )
                             )
                         )
                     )
                 )
             )
-        )
+        ),
+        download_script
     )

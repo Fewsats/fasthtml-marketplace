@@ -10,6 +10,8 @@ from storage import get_storage
 from fastsql.core import Database
 from main_layout import MainLayout
 from item_details_page import ItemDetailsPage
+from item_card import ItemCard
+from gallery import Gallery
 
 # Database configuration
 url = os.environ['DATABASE_URL'].replace('postgres://', 'postgresql://')
@@ -142,18 +144,6 @@ def mk_form(**kw):
 
 
 @rt("/")
-async def get(request):
-    upload_form = Card(H4("Upload a New Item Form"),
-                       mk_form(hx_target="#item-list", hx_swap="afterbegin"))
-    # gallery = Gallery(items)
-    # gallery = Div(*[item.__ft__() for item in items()],
-    #               id='item-list',
-    #               cls="row")
-    # return Titled("Marketplace", Main(upload_form, gallery, cls='container'))
-    return MainLayout(title="Files Catalog", items=items)
-
-
-@rt("/")
 async def post(request):
     form = await request.form()
 
@@ -173,6 +163,20 @@ async def post(request):
 
     new_item = items.insert(Item(**item_data))
     return new_item.__ft__()
+
+
+@rt("/")
+async def get(request):
+    return MainLayout(title="Files Catalog", items=items())
+
+
+@rt("/search", methods=["GET"])
+async def search(request):
+    query = request.query_params.get("search", "")
+    filtered_items = [
+        item for item in items() if query.lower() in item.title.lower()
+    ]
+    return Gallery(filtered_items)
 
 
 @rt("/download/{id:int}", methods=["GET"])
