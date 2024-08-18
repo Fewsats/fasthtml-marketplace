@@ -163,6 +163,14 @@ async def post(request):
 
     new_item = items.insert(Item(**item_data))
     return new_item.__ft__()
+async def get(request):
+    return MainLayout(title="Files Catalog", items=items())
+
+@rt("/search", methods=["GET"])
+async def search(request):
+    query = request.query_params.get("search", "")
+    filtered_items = [item for item in items() if query.lower() in item.title.lower()]
+    return Gallery(filtered_items)
 
 
 @rt("/")
