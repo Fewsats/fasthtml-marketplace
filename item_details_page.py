@@ -5,7 +5,7 @@ DEPLOYMENT_URL = os.getenv('DEPLOYMENT_URL', 'http://localhost:5001')
 
 def ItemDetailsPage(item):
     price = f'${item.price / 100:.2f}'
-    cover_image = f'/files/{item.cover_image}' if item.cover_image else 'https://via.placeholder.com/250x200'
+    cover_image = f'https://fewsats-production-public-files.s3.us-west-1.amazonaws.com/cover-images/{item.id}'
     file_name = item.file_path.split('/')[-1] if item.file_path else ''
 
     download_script = Script()('''

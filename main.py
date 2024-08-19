@@ -4,58 +4,15 @@ import uuid
 from starlette.responses import RedirectResponse, PlainTextResponse, Response
 from starlette.middleware.cors import CORSMiddleware
 from l402.server import Authenticator, FastHTML_l402_decorator
-from l402.server.invoice_provider import FewsatsInvoiceProvider
-from credentials import FastSQLMacaroonService
-from storage import get_storage
-from fastsql.core import Database
+
 from main_layout import MainLayout
 from item_details_page import ItemDetailsPage
 from item_card import ItemCard
 from gallery import Gallery
-
-# Database configuration
-url = os.environ['DATABASE_URL'].replace('postgres://', 'postgresql://')
-db = Database(url)
+from api_client import fetch_items, map_api_item_to_item, fetch_single_item
+import httpx
 
 
-# Initialize database
-@dataclass
-class Item:
-    id: int
-    title: str
-    description: str
-    price: int
-    cover_image: str
-    file_path: str
-    tags: str = ""
-
-
-@patch
-def __ft__(self: Item):
-    return ItemCard(self)
-
-
-items = db.create(Item, pk='id')
-
-# Set up Fewsats invoice provider
-# 1. Sign up at app.fewsats.com
-# 2. Create API Key
-# 3a. Export env variable FEWSATS_API_KEY=fs_...
-# or
-# 3b. Pass the api key to the provider FewsatsInvoiceProvider(api_key="fs_...")
-api_key = os.environ.get("FEWSATS_API_KEY")
-fewsats_provider = FewsatsInvoiceProvider(api_key=api_key)
-
-# Set up MacaroonService for storing authentication tokens
-macaroon_service = FastSQLMacaroonService(url)
-
-# Initialize the L402 Authenticator
-authenticator = Authenticator(location='localh8000',
-                              invoice_provider=fewsats_provider,
-                              macaroon_service=macaroon_service)
-
-# Initialize the storage to handle file uploads
-storage = get_storage()
 
 # Add Flexbox Grid CSS
 flexboxgrid = Link(
@@ -88,121 +45,42 @@ app.add_middleware(
 rt = app.route
 
 
-@rt("/files/{fname:path}", methods=["GET"])
-async def get(fname: str):
-    file_content = storage.download(fname)
-    if file_content is None:
-        return PlainTextResponse("File not found", status_code=404)
-    return Response(content=file_content)
 
-
-def mk_form(**kw):
-    input_fields = Fieldset(
-        Label(
-            "Title",
-            Input(id="new-title",
-                  name="title",
-                  placeholder="Heart of Gold",
-                  required=True,
-                  **kw)),
-        Label(
-            "Description",
-            Input(id="new-description",
-                  name="description",
-                  placeholder="3D Model of the spaceship Heart of Gold",
-                  required=True,
-                  **kw)),
-        Label(
-            "Price",
-            Input(id="new-price",
-                  name="price",
-                  placeholder="Price ($)",
-                  type="number",
-                  required=True,
-                  **kw)),
-        Group(
-            Label(
-                "Cover Image",
-                Input(id="new-cover-image",
-                      name="cover_image",
-                      type="file",
-                      required=True,
-                      **kw)),
-            Label(
-                "Item File",
-                Input(id="new-file",
-                      name="file",
-                      type="file",
-                      required=True,
-                      **kw))))
-    return Form(Group(input_fields),
-                Button("Upload"),
-                hx_post="/",
-                hx_target="#item-list",
-                hx_swap="afterbegin",
-                enctype="multipart/form-data")
-
-
-@rt("/")
-async def post(request):
-    form = await request.form()
-
-    item_data = {
-        'title': form.get('title'),
-        'description': form.get('description'),
-        'price': form.get('price'),
-    }
-
-    # Handle file uploads
-    for field in ['cover_image', 'file_path']:
-        if file := form.get(field):
-            content = await file.read()
-            filename = f"{field}_{uuid.uuid4()}{os.path.splitext(file.filename)[1]}"
-            storage.upload(filename, content)
-            item_data[field] = filename
-
-    new_item = items.insert(Item(**item_data))
-    return new_item.__ft__()
+@rt("/", methods=["GET"])
 async def get(request):
-    return MainLayout(title="Files Catalog", items=items())
+    api_items = await fetch_items()
+    return MainLayout(title="Files Catalog", items=api_items)
 
 @rt("/search", methods=["GET"])
 async def search(request):
-    query = request.query_params.get("search", "")
-    filtered_items = [item for item in items() if query.lower() in item.title.lower()]
-    return Gallery(filtered_items)
-
-
-@rt("/")
-async def get(request):
-    return MainLayout(title="Files Catalog", items=items())
-
-
-@rt("/search", methods=["GET"])
-async def search(request):
-    query = request.query_params.get("search", "")
+    query = request.query_params.get("search", "").lower()
+    api_items = await fetch_items()
     filtered_items = [
-        item for item in items() if query.lower() in item.title.lower()
+        map_api_item_to_item(item) for item in api_items
+        if query in item["name"].lower() or any(query in tag.lower() for tag in item["tags"])
     ]
     return Gallery(filtered_items)
 
 
-@rt("/download/{id:int}", methods=["GET"])
-@FastHTML_l402_decorator(authenticator, lambda req:
-                         (1, 'USD', 'Download of an item'))
-async def download_file(req, id: int):
-    item = items[id]
-    if not item or not item.file_path:
-        return PlainTextResponse("File not found", status_code=404)
-    return RedirectResponse(url=f"/files/{item.file_path}")
-
-
-@rt("/file/{id:int}", methods=["GET"])
-async def get_item_details(request, id: int):
-    item = items[id]
+@rt("/download/{id:str}", methods=["GET"])
+async def download_file(req, id: str):
+    api_items = await fetch_items()
+    item = next((item for item in api_items if item["external_id"] == id), None)
     if not item:
-        return PlainTextResponse("Item not found", status_code=404)
-    return ItemDetailsPage(item)
+        return PlainTextResponse("File not found", status_code=404)
+    return RedirectResponse(url=item["l402_url"])
+
+
+@rt("/file/{id:str}", methods=["GET"])
+async def get_item_details(request, id: str):
+    try:
+        item = await fetch_single_item(id)
+        return ItemDetailsPage(item)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return PlainTextResponse("Item not found", status_code=404)
+        else:
+            return PlainTextResponse("An error occurred", status_code=500)
 
 
 serve()
