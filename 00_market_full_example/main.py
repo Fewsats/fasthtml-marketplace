@@ -5,17 +5,17 @@ from starlette.responses import RedirectResponse, PlainTextResponse, Response
 from starlette.middleware.cors import CORSMiddleware
 from l402.server import Authenticator, FastHTML_l402_decorator
 from l402.server.invoice_provider import FewsatsInvoiceProvider
-from credentials import FastSQLMacaroonService
+from l402.server.macaroons import SqliteMacaroonService
 from storage import get_storage
-from fastsql.core import Database
 from main_layout import MainLayout
 from item_details_page import ItemDetailsPage
 from item_card import ItemCard
 from gallery import Gallery
+from search_bar import SearchBar
+from upload_form import UploadForm
 
 # Database configuration
-url = os.environ['DATABASE_URL'].replace('postgres://', 'postgresql://')
-db = Database(url)
+db = database('data/market.db')
 
 
 # Initialize database
@@ -47,7 +47,7 @@ api_key = os.environ.get("FEWSATS_API_KEY")
 fewsats_provider = FewsatsInvoiceProvider(api_key=api_key)
 
 # Set up MacaroonService for storing authentication tokens
-macaroon_service = FastSQLMacaroonService(url)
+macaroon_service = SqliteMacaroonService('data/credentials.db')
 
 # Initialize the L402 Authenticator
 authenticator = Authenticator(location='localh8000',
@@ -64,16 +64,10 @@ flexboxgrid = Link(
     "https://cdnjs.cloudflare.com/ajax/libs/flexboxgrid/6.3.1/flexboxgrid.min.css",
     type="text/css")
 
-# Add Tailwind CSS from CDN
-# tailwind = Link(
-#     rel="stylesheet",
-#     href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css",
-#     type="text/css")
 
 tailwind_script = Script(src="https://cdn.tailwindcss.com")
 
 app = FastHTML(hdrs=(flexboxgrid, tailwind_script))
-# app = FastHTML(hdrs=(picolink, flexboxgrid, tailwind))
 
 # Update CORS middleware to expose all headers for L402
 app.add_middleware(
@@ -143,6 +137,20 @@ def mk_form(**kw):
                 enctype="multipart/form-data")
 
 
+
+@rt("/upload")
+async def get_upload_page(request):
+    upload_content = Div(id='upload-form', cls='relative mx-auto -mt-60 w-full max-w-screen-1xl px-4 pb-7 md:px-14')(
+        Div(cls='w-full rounded-lg border border-gray-200 bg-white px-4 py-8 md:px-8 md:py-12')(
+            Div(cls='max-w-md mx-auto')(
+                UploadForm(),
+                Div(id="upload-result", cls="mt-4")
+            )
+        )
+    )
+    return MainLayout(title="Upload File", content=upload_content)
+
+# Modify the existing POST handler to return a success message
 @rt("/")
 async def post(request):
     form = await request.form()
@@ -153,7 +161,6 @@ async def post(request):
         'price': form.get('price'),
     }
 
-    # Handle file uploads
     for field in ['cover_image', 'file_path']:
         if file := form.get(field):
             content = await file.read()
@@ -162,12 +169,17 @@ async def post(request):
             item_data[field] = filename
 
     new_item = items.insert(Item(**item_data))
-    return new_item.__ft__()
+    return Div(cls="bg-green-100 border-l-4 border-green-500 text-green-700 p-4", role="alert")(
+        P(cls="font-bold")("Success!"),
+        P(f"Item '{new_item.title}' has been uploaded successfully.")
+    )
 
 
 @rt("/")
 async def get(request):
-    return MainLayout(title="Files Catalog", items=items())
+    return MainLayout(title="Files Catalog", 
+                      search_bar=SearchBar(), 
+                      content=Gallery(items()))
 
 
 @rt("/search", methods=["GET"])
